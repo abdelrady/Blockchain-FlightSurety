@@ -26,15 +26,9 @@ contract FlightSuretyApp {
 
     address private contractOwner;          // Account used to deploy contract
 
-    struct Flight {
-        bool isRegistered;
-        uint8 statusCode;
-        uint256 updatedTimestamp;        
-        address airline;
-    }
-    mapping(bytes32 => Flight) private flights;
+    uint constant votingThreshold = 4;
 
- 
+    FlightSuretyData dataContract;
     /********************************************************************************************/
     /*                                       FUNCTION MODIFIERS                                 */
     /********************************************************************************************/
@@ -50,7 +44,7 @@ contract FlightSuretyApp {
     modifier requireIsOperational() 
     {
          // Modify to call data contract's status
-        require(true, "Contract is currently not operational");  
+        require(isOperational(), "Contract is currently not operational");  
         _;  // All modifiers require an "_" which indicates where the function body will be added
     }
 
@@ -73,10 +67,12 @@ contract FlightSuretyApp {
     */
     constructor
                                 (
+                                    address dataContractAddress
                                 ) 
                                 public 
     {
         contractOwner = msg.sender;
+        dataContract = FlightSuretyData(dataContractAddress);
     }
 
     /********************************************************************************************/
@@ -85,10 +81,9 @@ contract FlightSuretyApp {
 
     function isOperational() 
                             public 
-                            pure 
                             returns(bool) 
     {
-        return true;  // Modify to call data contract's status
+        return  dataContract.isOperational();  // Modify to call data contract's status
     }
 
     /********************************************************************************************/
@@ -101,13 +96,47 @@ contract FlightSuretyApp {
     *
     */   
     function registerAirline
-                            (   
+                            (
+                                address airline,
+                                string name
                             )
                             external
-                            pure
                             returns(bool success, uint256 votes)
     {
-        return (success, 0);
+        bool senderIsFunded, senderIsRegistered, newAirlineRegistered, newAirlineFunded, approvedByLength;
+        (senderIsRegistered, senderIsFunded, approvedByLength) = dataContract.getAirlineInfo(msg.sender);
+        (newAirlineRegistered, newAirlineFunded, approvedByLength) = dataContract.getAirlineInfo(airline);
+
+        require(senderIsFunded, "Only current active airlines can add another airlines");
+        require(!newAirlineRegistered, "airline is already registered");
+
+        uint256 registeredAirlinesCount = dataContract.getRegisteredAirlinesCount();
+        if(registeredAirlinesCount <= votingThreshold || approvedByLength >= registeredAirlinesCount/2)
+        {
+            dataContract.registerAirline(airline, name);
+            success = true;
+            votes = 0;
+        }
+        else {
+            address[] approvalList = dataContract.getAirlineApprovalList(airline)
+            bool isDuplicate = false;
+            for(uint c=0; c<approvalList.length; c++) {
+                if (approvalList[c] == msg.sender) {
+                    isDuplicate = true;
+                    break;
+                }
+            }
+            require(!isDuplicate, "Caller has already called this function.");
+            
+            dataContract.addToAirlineApprovalList(msg.sender);
+            if(approvalList.length + 1 >= registeredAirlinesCount/2)
+            {
+                dataContract.registerAirline(airline, name);
+                success = true;
+            }
+            votes = approvalList.length + 1;
+        }
+        return (success, votes);
     }
 
 
@@ -117,11 +146,13 @@ contract FlightSuretyApp {
     */  
     function registerFlight
                                 (
+                                    string memory flight,
+                                    uint256 timestamp
                                 )
                                 external
-                                pure
     {
-
+        bytes32 flightKey = getFlightKey(msg.sender, flight, timestamp);
+        dataContract.registerFlight(flightKey);
     }
     
    /**
@@ -135,9 +166,11 @@ contract FlightSuretyApp {
                                     uint256 timestamp,
                                     uint8 statusCode
                                 )
-                                internal
-                                pure
+                                external
     {
+        bytes32 flightKey = getFlightKey(airline, flight, timestamp);
+        dataContract.processFlightStatus(flightKey);
+        emit FlightIsProcessed(airline, flight, statusCode);
     }
 
 
@@ -162,6 +195,18 @@ contract FlightSuretyApp {
         emit OracleRequest(index, airline, flight, timestamp);
     } 
 
+    function fund
+                            (   
+                            )
+                            public
+                            payable
+    {
+        bool airlineRegistered, airlineFunded, approvedByLength;
+        (airlineRegistered, airlineFunded, approvedByLength) = dataContract.getAirlineInfo(msg.sender);
+        require(airlineRegistered, "Airline must be registered to make fund.");
+        require(msg.value >= 10 ether, "At least 10 ether is required to make a fund for an airline.");
+        dataContract.fund(msg.sender);
+    }
 
 // region ORACLE MANAGEMENT
 
@@ -335,3 +380,35 @@ contract FlightSuretyApp {
 // endregion
 
 }   
+
+contract FlightSuretyData {
+    function setOperatingStatus
+                            (
+                                bool mode
+                            ) 
+                            external;
+    function registerAirline
+                            (   
+                                address airline,
+                                string name
+                            )
+                            external;
+
+    function buy
+                            (
+                                address airline
+                            )
+                            external
+                            payable;
+    function pay
+                            (
+                                address account
+                            )
+                            external;
+    function fund
+                            (   
+                                address airline
+                            )
+                            public;
+
+}
