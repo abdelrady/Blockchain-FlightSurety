@@ -13,6 +13,9 @@ export default class Contract {
         this.owner = null;
         this.airlines = [];
         this.passengers = [];
+        this.gasLimit = this.web3.utils.toHex(4712388);
+        this.gasPrice = this.web3.utils.toHex(this.web3.utils.toWei('10', 'gwei'));
+        this.serverPath = 'http://localhost:3000/';
     }
 
     initialize(callback) {
@@ -27,8 +30,12 @@ export default class Contract {
             while (this.airlines.length < 5) {
                 let airline = { id: accts[counter++], name: 'Airplane #' + (counter - 1) };
                 this.airlines.push(airline);
-                this.flightSuretyApp.methods.registerAirline(airline.id, airline.name)
-                    .send({ from: this.firstAirline })
+                try {
+                    this.flightSuretyApp.methods.registerAirline(airline.id, airline.name)
+                        .send({ from: this.firstAirline })
+                }
+                catch (err) {
+                }
             }
 
             while (this.passengers.length < 5) {
@@ -46,13 +53,13 @@ export default class Contract {
             .call({ from: self.owner }, callback);
     }
 
-    fetchFlightStatus(flight, callback) {
+    fetchFlightStatus(flight, airline, flightTimestamp, callback) {
         let self = this;
         let payload = {
-            airline: self.airlines[0],
+            airline: airline,
             flight: flight,
-            timestamp: Math.floor(Date.now() / 1000)
-        }
+            timestamp: flightTimestamp
+        };
         self.flightSuretyApp.methods
             .fetchFlightStatus(payload.airline, payload.flight, payload.timestamp)
             .send({ from: self.owner }, (error, result) => {
@@ -65,10 +72,17 @@ export default class Contract {
     }
 
     fetchFlightsFromServer(callback) {
-        fetch('http://localhost:3000/airplanes/flights')
-            .then(res => {
-                let flights = res.json()
-                callback(flights)
+        fetch(this.serverPath + 'airplanes/flights')
+            .then(res => res.json())
+            .then(callback);
+    }
+
+    buyInsurance(airline, flight, timestamp, amount, callback) {
+        amount = this.web3.utils.toWei(amount, 'ether');
+        this.flightSuretyApp.methods
+            .buy(airline, flight, timestamp)
+            .send({ from: this.passengers[0], value: amount }, (error, result) => {
+                if (callback) callback(error, result);
             });
     }
 
@@ -77,18 +91,19 @@ export default class Contract {
         this.flightSuretyApp.methods
             .fund()
             .send({ from: airline, value: amount }, (error, result) => {
-                if (callback) callback(error, result);
                 // register 2 flights per airline
                 let flightTimestamp = Math.floor(Date.now() / 1000);
                 this.flightSuretyApp.methods.registerFlight('FL-A-' + flightTimestamp, flightTimestamp)
-                    .send({ from: airline.id })
-                flightTimestamp = flightTimestamp + 1 * 24 * 60 * 60;
-                this.flightSuretyApp.methods.registerFlight('FL-A-' + flightTimestamp, flightTimestamp)
-                    .send({ from: airline.id })
+                    .send({ from: airline, gas: this.gasLimit, gasPrice: this.gasPrice }, (err, res) => {
+                        if (callback) callback(error, result);
+                    })
             });
+    }
 
-
-
+    checkBalance(callback) {
+        fetch(this.serverPath + 'passenger/' + this.passengers[0] + '/balance')
+            .then(res => res.json())
+            .then(callback);
     }
 
 }

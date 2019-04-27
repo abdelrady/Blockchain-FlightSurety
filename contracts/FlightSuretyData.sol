@@ -39,7 +39,7 @@ contract FlightSuretyData {
     bool private operational = true;                                    // Blocks all state changes throughout the contract if false
     uint256 public registeredAirlinesCount = 1;
     mapping(address => AirlineInfo) public airlines;
-    mapping(address => uint256) passengersBalances;
+    mapping(address => uint256) public passengersBalances;
     mapping(address => bool) public authorizedContracts;
     mapping(address => uint256) public insurees;
     //address constant firstAirlineAddress = 0x954cB087C29cf91FDFfd6A144F2F7bBc8b87e1bA;
@@ -48,7 +48,8 @@ contract FlightSuretyData {
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
-
+    event FlightStatusUpdated(bytes32 flightKey, uint8 status, uint256 passengersCount);
+    event AmountRefundedToPassengerBalance(address passenger, uint256 refundAmount);
 
     /**
     * @dev Constructor
@@ -182,6 +183,18 @@ contract FlightSuretyData {
     {
         return airlines[airline].approvedBy;
     }
+
+    function getPassengerInsuredAmount(address airline,
+                            string flight,
+                            uint256 timestamp,
+                            address passenger)
+    external
+    returns (uint256)
+    {
+        bytes32 flightKey = getFlightKey(airline, flight, timestamp);
+        return flights[flightKey].passengersPaymentAmount[passenger];
+    }
+    
     
     /********************************************************************************************/
     /*                                     SMART CONTRACT FUNCTIONS                             */
@@ -249,7 +262,8 @@ contract FlightSuretyData {
         require(flight.isRegistered, "Flight isn't registered");
         //require(flight.statusCode == STATUS_CODE_UNKNOWN, "Flight isn't registered");
 
-        flight.statusCode = statusCode;
+        flights[flightKey].statusCode = statusCode;
+        emit FlightStatusUpdated(flightKey, statusCode, flight.insuredPassengers.length);
         if (statusCode == 20) {
             creditInsurees(flightKey);
         }
@@ -267,13 +281,11 @@ contract FlightSuretyData {
                             external
                             payable
     {
-        Flight flight = flights[flightKey];
-        require(flight.isRegistered, "Flight isn't registered.");
-        mapping(address => uint256) passengersAmount = flight.passengersPaymentAmount;
-        require(passengersAmount[passenger] == 0, "Passenger can't insure multiple times for same airplane/flight");
+        require(flights[flightKey].isRegistered, "Flight isn't registered.");
+        // require(flights[flightKey].passengersPaymentAmount[passenger] == 0, "Passenger can't insure multiple times for same airplane/flight");
 
-        passengersAmount[passenger] = msg.value;
-        flight.insuredPassengers.push(passenger);
+        flights[flightKey].passengersPaymentAmount[passenger] = uint256(msg.value);
+        flights[flightKey].insuredPassengers.push(passenger);
     }
 
     /**
@@ -289,9 +301,10 @@ contract FlightSuretyData {
         require(flight.isRegistered, "Flight isn't registered.");
 
         for (uint a = 0; a < flight.insuredPassengers.length; a++) {
-            uint256 refundAmount = flight.passengersPaymentAmount[flight.insuredPassengers[a]].mul(2).div(3);
-            passengersBalances[flight.insuredPassengers[a]] = passengersBalances[flight.insuredPassengers[a]].add(refundAmount);
-            //emit Credited(flight.insuredPassengers[a], refundAmount);
+            address passenger = flight.insuredPassengers[a];
+            uint256 refundAmount = flights[flightKey].passengersPaymentAmount[passenger].mul(3).div(2);
+            emit AmountRefundedToPassengerBalance(passenger, refundAmount);
+            passengersBalances[passenger] = passengersBalances[passenger].add(refundAmount);
         }
     }
     
@@ -312,7 +325,6 @@ contract FlightSuretyData {
         uint256 value = passengersBalances[account];
         passengersBalances[account] = 0;
         account.transfer(value);
-        //emit PassengerPaid(account, value);
     }
 
    /**

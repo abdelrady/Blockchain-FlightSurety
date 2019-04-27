@@ -14,16 +14,22 @@ import './flightsurety.css';
         contract.isOperational((error, result) => {
             console.log(error, result);
             display('Operational Status', 'Check if contract is operational', [{ label: 'Operational Status', error: error, value: result }]);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         });
-
 
         // User-submitted transaction
         DOM.elid('submit-oracle').addEventListener('click', () => {
-            let flight = DOM.elid('flight-number').value;
-            // Write transaction
-            contract.fetchFlightStatus(flight, (error, result) => {
+            let flightsList = DOM.elid('flights-list-2');
+            let optionPayload = JSON.parse(flightsList.options[flightsList.selectedIndex].getAttribute("data-payload"));
+            let flight = optionPayload.flight;
+            let airline = optionPayload.airline;
+            let flightTimestamp = optionPayload.timestamp;
+            
+            contract.fetchFlightStatus(flight, airline, flightTimestamp, (error, result) => {
                 display('Oracles', 'Trigger oracles', [{ label: 'Fetch Flight Status', error: error, value: result.flight + ' ' + result.timestamp }]);
             });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
         })
         
         fillAirlines(contract.getAirlines())
@@ -33,26 +39,36 @@ import './flightsurety.css';
         DOM.elid('submit-fund').addEventListener('click', () => {
             let airline = DOM.elid('airline-fund-list-1').value;
             let amount = DOM.elid('airline-fund-value').value;
-            // Write transaction
             contract.submitAirlineFund(airline, amount, (error, result) => {
-                display('Airlines', 'Call Fund Airline', [{ label: 'Fund Airline', error: error, value: 'Airline funded successfully.' }], 'display-wrapper-1');
+                display('Airlines', 'Call Fund Airline', [{ label: 'Fund Airline', error: error, value: 'Airline funded successfully.' }], 'display-wrapper');
+                contract.fetchFlightsFromServer(fillFlightsOptions);
             });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
         })
 
         DOM.elid('buy-insurance').addEventListener('click', () => {
-            let airline = DOM.elid('airline-fund-list-2').value;
-            let flight = DOM.elid('flight-number').value;
-            let flightTimestamp = DOM.elid('flight-date').value;
+            let flightsList = DOM.elid('flights-list-1');
+            let optionPayload = JSON.parse(flightsList.options[flightsList.selectedIndex].getAttribute("data-payload"));
+            let flight = optionPayload.flight;
+            let airline = optionPayload.airline;
+            let flightTimestamp = optionPayload.timestamp;
             let amount = DOM.elid('insurance-value').value;
-            // Write transaction
-            contract.buyInsurance(airline, amount, (error, result) => {
-                display('Airlines', 'Call Fund Airline', [{ label: 'Fund Airline', error: error, value: 'Airline funded successfully.' }], 'display-wrapper-1');
+            contract.buyInsurance(airline, flight, flightTimestamp, amount, (error, result) => {
+                display('Buy Insurance', 'Call Buy Insurance', [{ label: 'Buy Insurance', error: error, value: 'Insurance bought successfully.' }], 'display-wrapper');
             });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        })
+
+        DOM.elid('claim-insurance').addEventListener('click', () => {
+            contract.checkBalance((error, result) => {
+                display('Check Balance', 'Call Server Api', [{ label: 'Check Balance for passenger', error: error, value: result.balance }], 'display-wrapper');
+            });
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         })
         
     });
-
-
 })();
 
 function fillFlightsOptions(flights){
@@ -63,8 +79,19 @@ function fillFlightsOptions(flights){
     }
 
     flights.forEach(a=>{
-        let option = DOM.createOption(a.name, a.id);
+        let option = DOM.createOption(a.flight, a.flight + "-" + a.airline, a);
         flightsSelect1.appendChild(option); 
+    });
+
+    let flightsSelect2 = DOM.elid('flights-list-2');
+    var length = flightsSelect2.options.length;
+    for (var i = 0; i < length; i++) {
+        flightsSelect2.options[i] = null;
+    }
+
+    flights.forEach(a=>{
+        let option = DOM.createOption(a.flight, a.flight + "-" + a.airline, a);
+        flightsSelect2.appendChild(option); 
     });
 
 }
@@ -75,20 +102,9 @@ function fillAirlines(airlines) {
         airlinesSelect1.options[i] = null;
     }
 
-    let airlinesSelect2 = DOM.elid('airline-fund-list-2');
-    var length = airlinesSelect2.options.length;
-    for (i = 0; i < length; i++) {
-        airlinesSelect2.options[i] = null;
-    }
-
     airlines.forEach(a=>{
         let option = DOM.createOption(a.name, a.id);
         airlinesSelect1.appendChild(option); 
-    });
-    
-    airlines.forEach(a=>{
-        let option = DOM.createOption(a.name, a.id);
-        airlinesSelect2.appendChild(option); 
     });
 }
 

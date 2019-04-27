@@ -1,6 +1,32 @@
+* in 1st terminal 
 ganache-cli -m "candy maple cake sugar pudding cream honey rich smooth crumble sweet treat" -d 1000 -a 50
 
+* in 2nd terminal 
 truffle migrate --reset --network development
 
+* in 3rd terminal
+npm install --save
+
 npm run server
+
+* in 4th terminal
+npm run dapp
+
+Video demonstration:
+http://www.screencast.com/t/fe9J2H6b4hFz
+
+
+Notes:
+
+* I create a flight after any airline is funded in UI
+* I added some apis in server app to call 2 contracts and check values stored. Here are soe apis
+
+    List all flights registered in contract
+    http://localhost:3000/airplanes/flights
+
+    check flight info (status, isRegistered, etc...)
+    http://localhost:3000/flight/0xC5fdf4076b8F3A5357c5E395ab970B5B54098Fef/FL-A-1556345060/0x5cc3f0e4
+
+    check balance of a passenger (address will change per passenger)
+    http://localhost:3000/passenger/0x2191eF87E392377ec08E7c08Eb105Ef5448eCED5/balance
 

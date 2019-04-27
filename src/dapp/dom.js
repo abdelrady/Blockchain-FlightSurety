@@ -56,7 +56,7 @@ export default class DOM {
     });
   }
 
-  static createOption(text, value) {
+  static createOption(text, value, data) {
     var opt = document.createElement('option');
 
     // create text node to add to option element (opt)
@@ -64,7 +64,10 @@ export default class DOM {
 
     // set value property of opt
     opt.value = value;
-    
+
+    if(data){
+      opt.setAttribute('data-payload', JSON.stringify(data));
+    }
     return opt;
   }
 
