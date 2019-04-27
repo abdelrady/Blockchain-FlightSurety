@@ -21,7 +21,7 @@ contract FlightSuretyData {
         bool isRegistered;
         bool isFunded;
         string name;
-        address[] approvedBy = new address[](0);
+        address[] approvedBy;
     }
 
     struct Flight {
@@ -29,15 +29,16 @@ contract FlightSuretyData {
         uint8 statusCode;
         uint256 updatedTimestamp;        
         address airline;
+        string flight;
         address[] insuredPassengers;
         mapping(address => uint256) passengersPaymentAmount;
     }
-    mapping(bytes32 => Flight) private flights;
+    mapping(bytes32 => Flight) public flights;
     
     address private contractOwner;                                      // Account used to deploy contract
     bool private operational = true;                                    // Blocks all state changes throughout the contract if false
-    uint256 registeredAirlinesCount = 0;
-    mapping(address => AirlineInfo) airlines;
+    uint256 public registeredAirlinesCount = 1;
+    mapping(address => AirlineInfo) public airlines;
     mapping(address => uint256) passengersBalances;
     mapping(address => bool) public authorizedContracts;
     mapping(address => uint256) public insurees;
@@ -60,7 +61,12 @@ contract FlightSuretyData {
                                 public 
     {
         contractOwner = msg.sender;
-        airlines[firstAirlineAddress].isRegistered = true;
+        airlines[firstAirlineAddress] = AirlineInfo({
+         isRegistered: true,
+         approvedBy: new address[](0),
+         isFunded: false,
+         name: 'Test Airlines'
+        });
         registeredAirlinesCount = 1;
     }
 
@@ -200,10 +206,10 @@ contract FlightSuretyData {
         registeredAirlinesCount = registeredAirlinesCount + 1;
     }
 
-    function addToAirlineApprovalList(address airline)
+    function addToAirlineApprovalList(address airline, address approver)
     external
     {
-        return airlines[airline].approvedBy.push(airline);
+        airlines[airline].approvedBy.push(approver);
     }
 
 
@@ -213,15 +219,21 @@ contract FlightSuretyData {
     */  
     function registerFlight
                                 (
-                                    bytes32 flightKey
+                                    string flight,
+                                    address airline,
+                                    uint256 timestamp
                                 )
                                 external
     {
         require(!flights[flightKey].isRegistered, "Flight is already registered.");
+        bytes32 flightKey = getFlightKey(airline, flight, timestamp);
         flights[flightKey] = Flight({
             isRegistered: true,
             updatedTimestamp: timestamp,
-            airline: airline
+            airline: airline,
+            flight: flight,
+            statusCode: STATUS_CODE_UNKNOWN,
+            insuredPassengers: new address[](0)
         });
     }
 
@@ -232,10 +244,10 @@ contract FlightSuretyData {
                                 )
                                 external
     {
-        Flight flight memory = flights[flightKey];
-        require(flight.statusCode != statusCode, "Flight already processed");
+        Flight memory flight = flights[flightKey];
+        //require(flight.statusCode != statusCode, "Flight already processed");
         require(flight.isRegistered, "Flight isn't registered");
-        require(flight.statusCode == STATUS_CODE_UNKNOWN, "Flight isn't registered");
+        //require(flight.statusCode == STATUS_CODE_UNKNOWN, "Flight isn't registered");
 
         flight.statusCode = statusCode;
         if (statusCode == 20) {
@@ -255,13 +267,12 @@ contract FlightSuretyData {
                             external
                             payable
     {
-        require(msg.value <= 1 ether, "Passenger can't insure for more than 1 ether.");
-
-        Flight memory flight = flights[flightKey];
+        Flight flight = flights[flightKey];
         require(flight.isRegistered, "Flight isn't registered.");
-        require(flight.passengersPaymentAmount[passenger] == 0 ether, "Passenger can't insure multiple times for same airplane/flight");
+        mapping(address => uint256) passengersAmount = flight.passengersPaymentAmount;
+        require(passengersAmount[passenger] == 0, "Passenger can't insure multiple times for same airplane/flight");
 
-        flight.passengersPaymentAmount[passenger] = msg.value;
+        passengersAmount[passenger] = msg.value;
         flight.insuredPassengers.push(passenger);
     }
 
@@ -274,13 +285,13 @@ contract FlightSuretyData {
                                 )
                                 internal
     {
-        Flight memory flight = flights[flightKey];
+        Flight flight = flights[flightKey];
         require(flight.isRegistered, "Flight isn't registered.");
 
-        for (uint a = 0; a < flight.insuredPassengers.length; i++) {
-            uint256 refundAmount = flight.passengersPaymentAmount[flight.insuredPassengers[a]] * 1.5;
+        for (uint a = 0; a < flight.insuredPassengers.length; a++) {
+            uint256 refundAmount = flight.passengersPaymentAmount[flight.insuredPassengers[a]].mul(2).div(3);
             passengersBalances[flight.insuredPassengers[a]] = passengersBalances[flight.insuredPassengers[a]].add(refundAmount);
-            emit Credited(flight.insuredPassengers[a], refundAmount);
+            //emit Credited(flight.insuredPassengers[a], refundAmount);
         }
     }
     
@@ -301,7 +312,7 @@ contract FlightSuretyData {
         uint256 value = passengersBalances[account];
         passengersBalances[account] = 0;
         account.transfer(value);
-        emit PassengerPaid(account, value);
+        //emit PassengerPaid(account, value);
     }
 
    /**
@@ -322,11 +333,11 @@ contract FlightSuretyData {
     function getFlightKey
                         (
                             address airline,
-                            string memory flight,
+                            string flight,
                             uint256 timestamp
                         )
                         pure
-                        internal
+                        public
                         returns(bytes32) 
     {
         return keccak256(abi.encodePacked(airline, flight, timestamp));

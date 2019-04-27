@@ -89,8 +89,8 @@ contract('Flight Surety Tests', async (accounts) => {
 
     it('(Data Contract) Airline can fund', async () => {
         await config.flightSuretyApp.fund({ from: config.firstAirline, value: config.minAllowedFund })
-        let airlineInfo = await config.flightSuretyData.getAirlineInfo(config.firstAirline);
-        assert(airlineInfo[1]/*Is Funded*/, 'Airline isn\'t funded');
+        let airlineInfo = await config.flightSuretyData.getAirlineInfo.call(config.firstAirline);
+        assert(await airlineInfo.isFunded, 'Airline isn\'t funded');
     })
 
     it('(Data Contract) Can add an app contract to list of authorized contracts', async () => {
@@ -100,37 +100,41 @@ contract('Flight Surety Tests', async (accounts) => {
     });
 
     it('(multiparty) After registration of 4 airlines, At least 1/2 of airlines must vote for new airline registration', async () => {
-        await config.flightSuretyApp.registerAirline(accounts[2], { from: config.firstAirline })
-        await config.flightSuretyApp.registerAirline(accounts[3], { from: config.firstAirline })
-        await config.flightSuretyApp.registerAirline(accounts[4], { from: config.firstAirline })
-        assert.equal(await config.flightSuretyData.registeredAirlinesCount.call(), 4)
+        await config.flightSuretyApp.registerAirline(accounts[2], 'Test #2', { from: config.firstAirline })
+        await config.flightSuretyApp.registerAirline(accounts[3], 'Test #3', { from: config.firstAirline })
+        await config.flightSuretyApp.registerAirline(accounts[4], 'Test #4', { from: config.firstAirline })
+        assert.equal(await config.flightSuretyData.getRegisteredAirlinesCount.call(), 4)
 
-        await config.flightSuretyApp.registerAirline(accounts[5], { from: config.firstAirline })
-        const airlineInfo = await config.flightSuretyApp.airlines.call(accounts[5])
-        assert((await airlineInfo.approvedBy.length) == 1, 'Approved list should contain 1 approver')
-        assert.equal(await airlineInfo.registered, false, 'Airline #5 registered should be false')
+        let res = await config.flightSuretyApp.registerAirline(accounts[5], 'Test #5', { from: config.firstAirline })
+        assert.equal(await config.flightSuretyData.getRegisteredAirlinesCount.call(), 4, 'errrr')
+        
+        const airlineInfo = await config.flightSuretyData.getAirlineInfo.call(accounts[5])
+        assert((await airlineInfo.approvedByLength) == 1, 'Approved list should contain 1 approver')
+        assert.equal(await airlineInfo.isRegistered, false, 'Airline #5 registered should be false')
 
         // airline shouldn't be able to vote twice
+        let errorThrown = false;
         try {
-            await config.flightSuretyApp.registerAirline(accounts[5], { from: config.firstAirline })
+            await config.flightSuretyApp.registerAirline(accounts[5], 'Test #5', { from: config.firstAirline })
         } catch (error) {
-
+            errorThrown = true;
         }
+        assert(errorThrown, 'airline shouldn\'t be able to vote twice');
 
-        await config.flightSuretyApp.registerAirline(accounts[5], { from: accounts[4] })
+        await config.flightSuretyApp.registerAirline(accounts[5], 'Test #5', { from: accounts[4] })
 
         airline = await config.flightSuretyData.airlines.call(accounts[5])
-        assert(await airline.registered, 'Airline #5 isn\'t registered')
+        assert(await airline.isRegistered, 'Airline #5 isn\'t registered')
     });
 
     it('Can register flight', async () => {
         let flightTimestamp = new Date();
         flightTimestamp.setDate(flightTimestamp.getDate() + 3);
-        await config.flightSuretyApp.registerFlight("ND1309", flightTimestamp, { from: config.firstAirline });
+        await config.flightSuretyApp.registerFlight("ND1309", flightTimestamp.getTime(), { from: config.firstAirline });
 
-        let flightKey = await config.flightSuretyData.getFlightKey(config.firstAirline, "ND1309", flightTimestamp);
-        let flight = await config.flightSuretyData.flights.call(flightKey)
-        assert(flight.isRegistered, 'Flight isn\'t registered')
+        let flightKey = await config.flightSuretyData.getFlightKey(config.firstAirline, "ND1309", flightTimestamp.getTime());
+        let flight = await config.flightSuretyData.flights.call(flightKey);
+        assert(await flight.isRegistered, 'Flight isn\'t registered')
     });
 
 });

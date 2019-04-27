@@ -103,7 +103,11 @@ contract FlightSuretyApp {
                             external
                             returns(bool success, uint256 votes)
     {
-        bool senderIsFunded, senderIsRegistered, newAirlineRegistered, newAirlineFunded, approvedByLength;
+        bool senderIsFunded;
+        bool senderIsRegistered;
+        bool newAirlineRegistered;
+        bool newAirlineFunded;
+        uint256 approvedByLength;
         (senderIsRegistered, senderIsFunded, approvedByLength) = dataContract.getAirlineInfo(msg.sender);
         (newAirlineRegistered, newAirlineFunded, approvedByLength) = dataContract.getAirlineInfo(airline);
 
@@ -111,14 +115,14 @@ contract FlightSuretyApp {
         require(!newAirlineRegistered, "airline is already registered");
 
         uint256 registeredAirlinesCount = dataContract.getRegisteredAirlinesCount();
-        if(registeredAirlinesCount <= votingThreshold || approvedByLength >= registeredAirlinesCount/2)
+        if(registeredAirlinesCount < votingThreshold)//|| approvedByLength >= registeredAirlinesCount/2
         {
             dataContract.registerAirline(airline, name);
             success = true;
             votes = 0;
         }
         else {
-            address[] approvalList = dataContract.getAirlineApprovalList(airline)
+            address[] memory approvalList = dataContract.getAirlineApprovalList(airline);
             bool isDuplicate = false;
             for(uint c=0; c<approvalList.length; c++) {
                 if (approvalList[c] == msg.sender) {
@@ -128,7 +132,7 @@ contract FlightSuretyApp {
             }
             require(!isDuplicate, "Caller has already called this function.");
             
-            dataContract.addToAirlineApprovalList(msg.sender);
+            dataContract.addToAirlineApprovalList(airline, msg.sender);
             if(approvalList.length + 1 >= registeredAirlinesCount/2)
             {
                 dataContract.registerAirline(airline, name);
@@ -146,34 +150,16 @@ contract FlightSuretyApp {
     */  
     function registerFlight
                                 (
-                                    string memory flight,
+                                    string flight,
                                     uint256 timestamp
                                 )
                                 external
     {
         bytes32 flightKey = getFlightKey(msg.sender, flight, timestamp);
-        dataContract.registerFlight(flightKey);
+        dataContract.registerFlight(flight, msg.sender, timestamp);
+        emit FlightRegistered(flightKey);
     }
     
-   /**
-    * @dev Called after oracle has updated flight status
-    *
-    */  
-    function processFlightStatus
-                                (
-                                    address airline,
-                                    string memory flight,
-                                    uint256 timestamp,
-                                    uint8 statusCode
-                                )
-                                external
-    {
-        bytes32 flightKey = getFlightKey(airline, flight, timestamp);
-        dataContract.processFlightStatus(flightKey);
-        emit FlightIsProcessed(airline, flight, statusCode);
-    }
-
-
     // Generate a request for oracles to fetch flight information
     function fetchFlightStatus
                         (
@@ -201,12 +187,29 @@ contract FlightSuretyApp {
                             public
                             payable
     {
-        bool airlineRegistered, airlineFunded, approvedByLength;
+        bool airlineRegistered;
+        bool airlineFunded;
+        uint256 approvedByLength;
         (airlineRegistered, airlineFunded, approvedByLength) = dataContract.getAirlineInfo(msg.sender);
         require(airlineRegistered, "Airline must be registered to make fund.");
-        require(msg.value >= 10 ether, "At least 10 ether is required to make a fund for an airline.");
+        require(msg.value >= 1 ether, "At least 10 ether is required to make a fund for an airline.");
         dataContract.fund(msg.sender);
     }
+
+    function buy
+                            (
+                                address airline,
+                                string flight,
+                                uint256 timestamp
+                            )
+                            external
+                            payable
+    {
+        require(msg.value <= 1 ether, "Passenger can't insure for more than 1 ether.");
+        bytes32 flightKey = getFlightKey(airline, flight, timestamp);
+        dataContract.buy(flightKey, msg.sender);
+    }
+
 
 // region ORACLE MANAGEMENT
 
@@ -217,7 +220,7 @@ contract FlightSuretyApp {
     uint256 public constant REGISTRATION_FEE = 1 ether;
 
     // Number of oracles that must respond for valid status
-    uint256 private constant MIN_RESPONSES = 3;
+    uint256 private constant MIN_RESPONSES = 2;
 
 
     struct Oracle {
@@ -239,10 +242,12 @@ contract FlightSuretyApp {
 
     // Track all oracle responses
     // Key = hash(index, flight, timestamp)
-    mapping(bytes32 => ResponseInfo) private oracleResponses;
+    mapping(bytes32 => ResponseInfo) public oracleResponses;
 
     // Event fired each time an oracle submits a response
     event FlightStatusInfo(address airline, string flight, uint256 timestamp, uint8 status);
+
+    event FlightRegistered(bytes32 flightKey);
 
     event OracleReport(address airline, string flight, uint256 timestamp, uint8 status);
 
@@ -314,8 +319,7 @@ contract FlightSuretyApp {
 
             emit FlightStatusInfo(airline, flight, timestamp, statusCode);
 
-            // Handle flight status as appropriate
-            processFlightStatus(airline, flight, timestamp, statusCode);
+            dataContract.processFlightStatus(key, statusCode);
         }
     }
 
@@ -396,7 +400,8 @@ contract FlightSuretyData {
 
     function buy
                             (
-                                address airline
+                                bytes32 flightKey, 
+                                address passenger
                             )
                             external
                             payable;
@@ -410,5 +415,39 @@ contract FlightSuretyData {
                                 address airline
                             )
                             public;
+    function isOperational() 
+                            public 
+                            view 
+                            returns(bool); 
+
+    function getAirlineInfo(address airline)
+    external
+    returns (bool isRegistered, bool isFunded, uint256 approvedByLength);
+
+    function getRegisteredAirlinesCount()
+    external
+    returns (uint256);
+
+    function getAirlineApprovalList(address airline)
+    external
+    returns (address[]);
+
+    function addToAirlineApprovalList(address airline, address approver)
+    external;
+
+    function registerFlight
+                                (
+                                    string flight,
+                                    address airline,
+                                    uint256 timestamp
+                                )
+                                external;
+
+    function processFlightStatus
+                                (
+                                    bytes32 flightKey,
+                                    uint8 statusCode
+                                )
+                                external;
 
 }

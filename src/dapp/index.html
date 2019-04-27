@@ -13,20 +13,65 @@
 
     <nav class="navbar navbar-expand-md navbar-dark bg-dark fixed-top">
         <a class="navbar-brand" href="#">FlightSurety</a>
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault"
-            aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault"
+            aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
     </nav>
 
-    <main class="container">
-
+    <div class="container">
         <div id="display-wrapper" class="top-20">
         </div>
+    </div>
+    <div class="container">
         <div class="row top-20">
-            <label class="form">Flight</label> <input type="text" id="flight-number"> <btn class="btn btn-primary" id="submit-oracle">Submit to Oracles</btn>
+            <h3>Step 1: Send Funds For Airline</h3><br />
+            <p><label class="form">Airline</label> <select id='airline-fund-list-1'
+                    class='airline-fund-list form-control'></select>
+                <label class="form">Fund Amount (Ether)</label> <input type="number" id="airline-fund-value"
+                    class=" form-control">
+                <btn class="btn btn-primary" id="submit-fund">Send Fund</btn>
+                <div id="display-wrapper-1" class="top-20">
+                </div>
+            </p>
         </div>
-    </main>
+    </div>
+    <div class="container">
+        <div class="row top-20">
+            <h3>Step 2: Buy Flight Insurance</h3><br />
+            <p>
+                <label class="form">Airline</label> <select id='airline-fund-list-2'
+                    class='airline-fund-list form-control'></select>
+                <label class="form">Flight</label> <select id='flights-list-1'
+                    class='form-control'></select>
+                <!-- <label class="form">Flight Number</label><input type="text" id="flight-number" class="form-control">
+                <label class="form">date</label><input type="date" id="flight-date" class="form-control"> -->
+                <label class="form">Insurance Amount (Ether)</label> <input type="number" id="insurance-value"
+                    class="form-control">
+                <btn class="btn btn-primary" id="buy-insurance">Buy</btn>
+            </p>
+        </div>
+    </div>
+    <div class="container">
+        <div class="row top-20">
+            <h3>Step 3: Submit Flight Status Update to Oracles</h3><br />
+            <p><label class="form">Flight</label> <select id='flights-list-2' class="form-control"></select>
+                <btn class="btn btn-primary" id="submit-oracle">Submit to Oracles</btn>
+            </p>
+        </div>
+    </div>
+    <div class="container">
+        <div class="row top-20">
+            <h3>Step 4: Claim Insurance</h3><br />
+            <p>
+                <btn class="btn btn-primary" id="claim-insurance">Claim</btn>
+            </p>
+        </div>
+
+    </div>
+    <!-- <main class="container">
+
+    </main> -->
 
 </body>
 
